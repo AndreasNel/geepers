@@ -15,8 +15,8 @@
 
 import random
 import operator
-import csv
 import itertools
+import pandas as pd
 
 import numpy
 
@@ -26,14 +26,20 @@ from deap import creator
 from deap import tools
 from deap import gp
 
-# Read the spam list features and put it in a list of lists.
-# The dataset is from http://archive.ics.uci.edu/ml/datasets/Spambase
-with open("spambase.csv") as spambase:
-    spamReader = csv.reader(spambase)
-    spam = list(list(float(elem) for elem in row) for row in spamReader)
+# Read the different field names
+fieldnames = pd.read_csv('field_names.csv', header=None, usecols=[0], squeeze=True).tolist()
+# Read the different attack types
+attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=True).tolist()[:-2]
+# Read the data, with the appropriate headings
+dataset = pd.read_csv('small_training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
+fieldnames = fieldnames[:-1]
+dataset.drop(columns=['difficulty_level'], inplace=True)
+# Cast all columns except the specified ones to floating point values
+dataset[dataset.columns.difference(['protocol_type', 'service', 'flag', 'attack_type'])] =\
+    dataset[dataset.columns.difference(['protocol_type', 'service', 'flag', 'attack_type'])].astype(float)
 
 # defined a new primitive set for strongly typed GP
-pset = gp.PrimitiveSetTyped("MAIN", itertools.repeat(float, 57), bool, "IN")
+pset = gp.PrimitiveSetTyped("MAIN", [float, str, str, str] + list(itertools.repeat(float, len(fieldnames) - 5)), bool, "IN")
 
 # boolean operators
 pset.addPrimitive(operator.and_, [bool, bool], bool)
@@ -67,10 +73,12 @@ def if_then_else(input, output1, output2):
 
 pset.addPrimitive(operator.lt, [float, float], bool)
 pset.addPrimitive(operator.eq, [float, float], bool)
+pset.addPrimitive(operator.eq, [str, str], bool)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
 
 # terminals
 pset.addEphemeralConstant("rand100", lambda: random.random() * 100, float)
+# TODO add the terminals necessary for the string values.
 pset.addTerminal(False, bool)
 pset.addTerminal(True, bool)
 
@@ -87,23 +95,22 @@ toolbox.register("compile", gp.compile, pset=pset)
 def evalSpambase(individual):
     # Transform the tree expression in a callable function
     func = toolbox.compile(expr=individual)
-    # Randomly sample 400 mails in the spam database
-    spam_samp = random.sample(spam, 400)
     # Evaluate the sum of correctly identified mail as spam
-    result = sum(bool(func(*mail[:57])) is bool(mail[57]) for mail in spam_samp)
+    results = [bool(func(*record[:-1])) for record in dataset.values]
+    result = len(dataset[dataset.attack_type == results])
     return result,
 
 
 toolbox.register("evaluate", evalSpambase)
-toolbox.register("select", tools.selTournament, tournsize=3)
+toolbox.register("select", tools.selTournament, tournsize=3) # use tourney size 20
 toolbox.register("mate", gp.cxOnePoint)
-toolbox.register("expr_mut", gp.genFull, min_=0, max_=2)
+toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
 
 def main():
     random.seed(10)
-    pop = toolbox.population(n=100)
+    pop = toolbox.population(n=100) # use pop size 500
     hof = tools.HallOfFame(1)
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("avg", numpy.mean)
@@ -111,10 +118,10 @@ def main():
     stats.register("min", numpy.min)
     stats.register("max", numpy.max)
 
-    algorithms.eaSimple(pop, toolbox, 0.5, 0.2, 40, stats, halloffame=hof)
+    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.2, ngen=50, stats=stats, halloffame=hof)
 
-    return pop, stats, hof
+    return pop, stats, hof, final_pop, logbook
 
 
 if __name__ == "__main__":
-    pop, stats, hof = main()
+    pop, stats, hof, final_pop, logbook = main()
