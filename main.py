@@ -19,6 +19,7 @@ import itertools
 import pandas as pd
 
 import numpy
+from sklearn.preprocessing import LabelEncoder
 
 from deap import algorithms
 from deap import base
@@ -34,9 +35,13 @@ attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=
 dataset = pd.read_csv('small_training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
 fieldnames = fieldnames[:-1]
 dataset.drop(columns=['difficulty_level'], inplace=True)
-# Cast all columns except the specified ones to floating point values
-dataset[dataset.columns.difference(['protocol_type', 'service', 'flag', 'attack_type'])] =\
-    dataset[dataset.columns.difference(['protocol_type', 'service', 'flag', 'attack_type'])].astype(float)
+
+le = LabelEncoder()
+dataset.protocol_type = le.fit_transform(dataset.protocol_type)
+dataset.service = le.fit_transform(dataset.service)
+dataset.flag = le.fit_transform(dataset.flag)
+
+dataset[dataset.columns.difference(['attack_type'])] = dataset[dataset.columns.difference(['attack_type'])].astype(float)
 
 # defined a new primitive set for strongly typed GP
 pset = gp.PrimitiveSetTyped("MAIN", [float, str, str, str] + list(itertools.repeat(float, len(fieldnames) - 5)), bool, "IN")
@@ -73,12 +78,10 @@ def if_then_else(input, output1, output2):
 
 pset.addPrimitive(operator.lt, [float, float], bool)
 pset.addPrimitive(operator.eq, [float, float], bool)
-pset.addPrimitive(operator.eq, [str, str], bool)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
 
 # terminals
 pset.addEphemeralConstant("rand100", lambda: random.random() * 100, float)
-# TODO add the terminals necessary for the string values.
 pset.addTerminal(False, bool)
 pset.addTerminal(True, bool)
 
@@ -92,7 +95,7 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 
 
-def evalSpambase(individual):
+def classify(individual):
     # Transform the tree expression in a callable function
     func = toolbox.compile(expr=individual)
     # Evaluate the sum of correctly identified mail as spam
@@ -101,8 +104,8 @@ def evalSpambase(individual):
     return result,
 
 
-toolbox.register("evaluate", evalSpambase)
-toolbox.register("select", tools.selTournament, tournsize=3) # use tourney size 20
+toolbox.register("evaluate", classify)
+toolbox.register("select", tools.selTournament, tournsize=20) # use tourney size 20
 toolbox.register("mate", gp.cxOnePoint)
 toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
@@ -110,7 +113,7 @@ toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
 def main():
     random.seed(10)
-    pop = toolbox.population(n=100) # use pop size 500
+    pop = toolbox.population(n=500) # use pop size 500
     hof = tools.HallOfFame(1)
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("avg", numpy.mean)
@@ -118,7 +121,7 @@ def main():
     stats.register("min", numpy.min)
     stats.register("max", numpy.max)
 
-    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.2, ngen=50, stats=stats, halloffame=hof)
+    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.6, mutpb=0.2, ngen=50, stats=stats, halloffame=hof)
 
     return pop, stats, hof, final_pop, logbook
 
