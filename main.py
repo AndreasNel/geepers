@@ -17,7 +17,9 @@ import random
 import operator
 import itertools
 import pandas as pd
-
+import pickle
+import matplotlib.pyplot as plt
+import networkx as nx
 import numpy
 from sklearn.preprocessing import LabelEncoder
 
@@ -51,7 +53,8 @@ pset.addPrimitive(operator.and_, [bool, bool], bool)
 pset.addPrimitive(operator.or_, [bool, bool], bool)
 pset.addPrimitive(operator.not_, [bool], bool)
 
-
+arg_mapper = {("IN" + str(i)): key for i, key in enumerate(fieldnames)}
+pset.renameArguments(**arg_mapper)
 # floating point operators
 # Define a protected division function
 def protectedDiv(left, right):
@@ -110,9 +113,10 @@ toolbox.register("mate", gp.cxOnePoint)
 toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
+toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 40))
+toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 40))
 
 def main():
-    random.seed(10)
     pop = toolbox.population(n=500) # use pop size 500
     hof = tools.HallOfFame(1)
     stats = tools.Statistics(lambda ind: ind.fitness.values)
@@ -127,4 +131,23 @@ def main():
 
 
 if __name__ == "__main__":
-    pop, stats, hof, final_pop, logbook = main()
+    for i in range(50):
+        pop, stats, hof, final_pop, logbook = main()
+
+        saved_data = {
+            "hof": hof,
+            "logbook": logbook,
+            "population": final_pop,
+        }
+        with open("classifiers/{}.pkl".format(i), "wb") as save_file:
+            pickle.dump(saved_data, save_file)
+
+    # nodes, edges, labels = gp.graph(hof[0])
+    # g = nx.Graph()
+    # g.add_nodes_from(nodes)
+    # g.add_edges_from(edges)
+    # pos = nx.drawing.nx_pydot.pydot_layout(g, prog="dot")
+    # nx.draw_networkx_nodes(g, pos)
+    # nx.draw_networkx_edges(g, pos)
+    # nx.draw_networkx_labels(g, pos, labels)
+    # plt.show()
