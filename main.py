@@ -18,8 +18,9 @@ import operator
 import itertools
 import pandas as pd
 import pickle
-import matplotlib.pyplot as plt
-import networkx as nx
+import datetime
+# import matplotlib.pyplot as plt
+# import networkx as nx
 import numpy
 from sklearn.preprocessing import LabelEncoder
 
@@ -34,7 +35,7 @@ fieldnames = pd.read_csv('field_names.csv', header=None, usecols=[0], squeeze=Tr
 # Read the different attack types
 attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=True).tolist()[:-2]
 # Read the data, with the appropriate headings
-dataset = pd.read_csv('small_training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
+dataset = pd.read_csv('training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
 fieldnames = fieldnames[:-1]
 dataset.drop(columns=['difficulty_level'], inplace=True)
 
@@ -46,7 +47,7 @@ dataset.flag = le.fit_transform(dataset.flag)
 dataset[dataset.columns.difference(['attack_type'])] = dataset[dataset.columns.difference(['attack_type'])].astype(float)
 
 # defined a new primitive set for strongly typed GP
-pset = gp.PrimitiveSetTyped("MAIN", [float, str, str, str] + list(itertools.repeat(float, len(fieldnames) - 5)), bool, "IN")
+pset = gp.PrimitiveSetTyped("MAIN", list(itertools.repeat(float, len(fieldnames) - 1)), bool, "IN")
 
 # boolean operators
 pset.addPrimitive(operator.and_, [bool, bool], bool)
@@ -113,8 +114,8 @@ toolbox.register("mate", gp.cxOnePoint)
 toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
-toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 40))
-toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 40))
+toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 20))
+toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 20))
 
 def main():
     pop = toolbox.population(n=500) # use pop size 500
@@ -125,22 +126,37 @@ def main():
     stats.register("min", numpy.min)
     stats.register("max", numpy.max)
 
-    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.6, mutpb=0.2, ngen=50, stats=stats, halloffame=hof)
+    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.6, mutpb=0.2, ngen=50, stats=stats, halloffame=hof, verbose=True)
 
     return pop, stats, hof, final_pop, logbook
 
 
 if __name__ == "__main__":
-    for i in range(50):
-        pop, stats, hof, final_pop, logbook = main()
-
-        saved_data = {
-            "hof": hof,
-            "logbook": logbook,
-            "population": final_pop,
-        }
-        with open("classifiers/{}.pkl".format(i), "wb") as save_file:
-            pickle.dump(saved_data, save_file)
+    for i in range(0, 10):
+        try:
+            print()
+            print("Starting run #{}...".format(i))
+            start_time = datetime.datetime.now()
+            print("Start time: {}".format(str(start_time)))
+            pop, stats, hof, final_pop, logbook = main()
+            execution_time = datetime.datetime.now() - start_time
+            print("Finished, saving data...")
+            print("End time: {}, Execution Time: {}".format(str(datetime.datetime.now()), str(execution_time)))
+            saved_data = {
+                "hof": hof,
+                "logbook": logbook,
+                "population": final_pop,
+            }
+            with open("classifiers/{}.pkl".format(i), "wb") as save_file:
+                pickle.dump(saved_data, save_file)
+            print()
+        except Exception as ex:
+            print()
+            print("=" * 50)
+            print('UNEXPECTED ERROR OCCURRED DURING RUN #{}'.format(i))
+            print(str(ex))
+            print("=" * 50)
+            print()
 
     # nodes, edges, labels = gp.graph(hof[0])
     # g = nx.Graph()
