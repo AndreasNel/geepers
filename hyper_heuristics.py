@@ -35,7 +35,7 @@ arg_mapper = {("IN" + str(i)): key for i, key in enumerate(fieldnames)}
 # Read the different attack types
 attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=True).tolist()[:-2]
 # Read the data, with the appropriate headings
-dataset = pd.read_csv('small_training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
+dataset = pd.read_csv('training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
 fieldnames = fieldnames[:-1]
 dataset.drop(columns=['difficulty_level'], inplace=True)
 
@@ -105,8 +105,9 @@ toolbox.register('population', tools.initRepeat, list, toolbox.individual)
 
 
 def eval_classification(individual):
-    results = [bool(classifiers[individual[index % len(individual)]]['func'](*record[:-1])) for index, record in enumerate(dataset.values)]
-    result = len(dataset[dataset.attack_type == results])
+    records = dataset.sample(frac=0.5)
+    results = [bool(classifiers[individual[index % len(individual)]]['func'](*record[:-1])) for index, record in enumerate(records.values)]
+    result = len(records[records.attack_type == results])
     return result,
 
 
@@ -133,7 +134,7 @@ def main():
 
 
 if __name__ == "__main__":
-    for i in range(0, 1):
+    for i in range(0, 5):
         try:
             print()
             print("Starting run #{}...".format(i))

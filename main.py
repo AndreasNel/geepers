@@ -45,6 +45,7 @@ dataset.service = le.fit_transform(dataset.service)
 dataset.flag = le.fit_transform(dataset.flag)
 
 dataset[dataset.columns.difference(['attack_type'])] = dataset[dataset.columns.difference(['attack_type'])].astype(float)
+dataset[['protocol_type', 'service', 'flag']] = dataset[['protocol_type', 'service', 'flag']].astype(int)
 
 # defined a new primitive set for strongly typed GP
 pset = gp.PrimitiveSetTyped("MAIN", list(itertools.repeat(float, len(fieldnames) - 1)), bool, "IN")
@@ -81,11 +82,19 @@ def if_then_else(input, output1, output2):
 
 
 pset.addPrimitive(operator.lt, [float, float], bool)
+pset.addPrimitive(operator.gt, [float, float], bool)
 pset.addPrimitive(operator.eq, [float, float], bool)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
 
+pset.addPrimitive(operator.lt, [int, int], bool)
+pset.addPrimitive(operator.gt, [int, int], bool)
+pset.addPrimitive(operator.eq, [int, int], bool)
+pset.addPrimitive(if_then_else, [bool, int, int], int)
+
 # terminals
 pset.addEphemeralConstant("rand100", lambda: random.random() * 100, float)
+for i in numpy.unique(dataset[['protocol_type', 'service', 'flag']]):
+    pset.addTerminal(i, int)
 pset.addTerminal(False, bool)
 pset.addTerminal(True, bool)
 
@@ -100,25 +109,27 @@ toolbox.register("compile", gp.compile, pset=pset)
 
 
 def classify(individual):
+    records = dataset.sample(frac=0.25)
     # Transform the tree expression in a callable function
     func = toolbox.compile(expr=individual)
     # Evaluate the sum of correctly identified mail as spam
-    results = [bool(func(*record[:-1])) for record in dataset.values]
-    result = len(dataset[dataset.attack_type == results])
+    results = [bool(func(*record[:-1])) for record in records.values]
+    result = len(records[records.attack_type == results])
     return result,
 
 
 toolbox.register("evaluate", classify)
-toolbox.register("select", tools.selTournament, tournsize=20) # use tourney size 20
+toolbox.register("select", tools.selDoubleTournament, fitness_size=20, parsimony_size=1.4, fitness_first=True)
 toolbox.register("mate", gp.cxOnePoint)
 toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
-toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 20))
-toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 20))
+toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 5))
+toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 5))
+
 
 def main():
-    pop = toolbox.population(n=500) # use pop size 500
+    pop = toolbox.population(n=250)
     hof = tools.HallOfFame(1)
     stats = tools.Statistics(lambda ind: ind.fitness.values)
     stats.register("avg", numpy.mean)
@@ -126,7 +137,7 @@ def main():
     stats.register("min", numpy.min)
     stats.register("max", numpy.max)
 
-    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.6, mutpb=0.2, ngen=50, stats=stats, halloffame=hof, verbose=True)
+    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.6, mutpb=0.2, ngen=15, stats=stats, halloffame=hof, verbose=True)
 
     return pop, stats, hof, final_pop, logbook
 
