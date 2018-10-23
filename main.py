@@ -48,7 +48,7 @@ dataset[dataset.columns.difference(['attack_type'])] = dataset[dataset.columns.d
 dataset[['protocol_type', 'service', 'flag']] = dataset[['protocol_type', 'service', 'flag']].astype(int)
 
 # defined a new primitive set for strongly typed GP
-pset = gp.PrimitiveSetTyped("MAIN", list(itertools.repeat(float, len(fieldnames) - 1)), bool, "IN")
+pset = gp.PrimitiveSetTyped("MAIN", [float, int, int, int] + list(itertools.repeat(float, len(fieldnames) - 5)), bool, "IN")
 
 # boolean operators
 pset.addPrimitive(operator.and_, [bool, bool], bool)
@@ -109,10 +109,8 @@ toolbox.register("compile", gp.compile, pset=pset)
 
 
 def classify(individual):
-    records = dataset.sample(frac=0.25)
-    # Transform the tree expression in a callable function
+    records = training_set.sample(n=1000)
     func = toolbox.compile(expr=individual)
-    # Evaluate the sum of correctly identified mail as spam
     results = [bool(func(*record[:-1])) for record in records.values]
     result = len(records[records.attack_type == results])
     return result,
@@ -144,11 +142,13 @@ def main():
 
 if __name__ == "__main__":
     for i in range(0, 10):
+        global training_set, validation_set, testing_set
         try:
             print()
             print("Starting run #{}...".format(i))
             start_time = datetime.datetime.now()
             print("Start time: {}".format(str(start_time)))
+            training_set, validation_set, testing_set = numpy.split(dataset.sample(frac=1.0), [int(0.6 * len(dataset)), int(0.8 * len(dataset))])
             pop, stats, hof, final_pop, logbook = main()
             execution_time = datetime.datetime.now() - start_time
             print("Finished, saving data...")
