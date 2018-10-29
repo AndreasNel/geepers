@@ -31,7 +31,6 @@ from deap import gp
 # ====================== CAPTURE DATA BEG ==================================
 # Read the different field names
 fieldnames = pd.read_csv('field_names.csv', header=None, usecols=[0], squeeze=True).tolist()
-arg_mapper = {("IN" + str(i)): key for i, key in enumerate(fieldnames)}
 # Read the different attack types
 attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=True).tolist()[:-2]
 # Read the data, with the appropriate headings
@@ -43,7 +42,9 @@ le = LabelEncoder()
 dataset.protocol_type = le.fit_transform(dataset.protocol_type)
 dataset.service = le.fit_transform(dataset.service)
 dataset.flag = le.fit_transform(dataset.flag)
+
 dataset[dataset.columns.difference(['attack_type'])] = dataset[dataset.columns.difference(['attack_type'])].astype(float)
+dataset[['protocol_type', 'service', 'flag']] = dataset[['protocol_type', 'service', 'flag']].astype(int)
 # ====================== CAPTURE DATA END ==================================
 
 # ====================== GP DEFINE BEG ==================================
@@ -64,7 +65,8 @@ def if_then_else(input, output1, output2):
 
 
 # Define a new primitive set for strongly typed GP
-pset = gp.PrimitiveSetTyped("MAIN", list(itertools.repeat(float, len(fieldnames) - 1)), bool, "IN")
+pset = gp.PrimitiveSetTyped("MAIN", [float, int, int, int] + list(itertools.repeat(float, len(fieldnames) - 5)), bool, "IN")
+arg_mapper = {("IN" + str(i)): key for i, key in enumerate(fieldnames)}
 pset.renameArguments(**arg_mapper)
 pset.addPrimitive(operator.and_, [bool, bool], bool)
 pset.addPrimitive(operator.or_, [bool, bool], bool)
@@ -74,9 +76,19 @@ pset.addPrimitive(operator.sub, [float, float], float)
 pset.addPrimitive(operator.mul, [float, float], float)
 pset.addPrimitive(protectedDiv, [float, float], float)
 pset.addPrimitive(operator.lt, [float, float], bool)
+pset.addPrimitive(operator.gt, [float, float], bool)
 pset.addPrimitive(operator.eq, [float, float], bool)
 pset.addPrimitive(if_then_else, [bool, float, float], float)
+pset.addPrimitive(operator.lt, [int, int], bool)
+pset.addPrimitive(operator.gt, [int, int], bool)
+pset.addPrimitive(operator.eq, [int, int], bool)
+pset.addPrimitive(if_then_else, [bool, int, int], int)
 pset.addEphemeralConstant("rand100", lambda: random.random() * 100, float)
+for i in numpy.unique(dataset[['protocol_type', 'service', 'flag']]):
+    pset.addTerminal(i, int)
+pset.addTerminal(False, bool)
+pset.addTerminal(True, bool)
+
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
@@ -104,11 +116,15 @@ toolbox.register('individual', tools.initRepeat, creator.Combo, toolbox.hh_sampl
 toolbox.register('population', tools.initRepeat, list, toolbox.individual)
 
 
-def eval_classification(individual):
-    records = dataset.sample(frac=0.5)
+def get_accuracy(individual, records):
     results = [bool(classifiers[individual[index % len(individual)]]['func'](*record[:-1])) for index, record in enumerate(records.values)]
     result = len(records[records.attack_type == results])
-    return result,
+    return result
+
+
+def eval_classification(individual):
+    records = dataset.sample(n=10000)
+    return get_accuracy(individual, records),
 
 
 toolbox.register('evaluate', eval_classification)
@@ -127,20 +143,25 @@ def main():
     stats.register("min", numpy.min)
     stats.register("max", numpy.max)
 
-    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.5, mutpb=0.2, ngen=30,
+    crossover_probability = random.uniform(0.0, 1.0)
+    mutation_probability = random.uniform(0.0, 1.0)
+    print('Crossover Rate: {}, Mutation Rate: {}'.format(crossover_probability, mutation_probability))
+    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=crossover_probability, mutpb=mutation_probability, ngen=30,
                                    stats=stats, halloffame=hof, verbose=True)
 
-    return pop, log, hof
+    return pop, log, hof, crossover_probability, mutation_probability
 
 
 if __name__ == "__main__":
+    global training_set, validation_set, testing_set
     for i in range(0, 5):
         try:
             print()
             print("Starting run #{}...".format(i))
             start_time = datetime.datetime.now()
             print("Start time: {}".format(str(start_time)))
-            pop, logbook, hof = main()
+            training_set, validation_set, testing_set = numpy.split(dataset.sample(frac=1.0), [int(0.6 * len(dataset)), int(0.8 * len(dataset))])
+            pop, logbook, hof, crossover_probability, mutation_probability = main()
             execution_time = datetime.datetime.now() - start_time
             print("Finished, saving data...")
             print("End time: {}, Execution Time: {}".format(str(datetime.datetime.now()), str(execution_time)))
@@ -148,9 +169,14 @@ if __name__ == "__main__":
                 "hof": hof,
                 "logbook": logbook,
                 "population": pop,
+                "crossover_probability": crossover_probability,
+                "mutation_probability": mutation_probability,
             }
             with open("hyper_heuristics/{}.pkl".format(i), "wb") as save_file:
                 pickle.dump(saved_data, save_file)
+            print("Training Accuracy: {}".format(get_accuracy(hof[0], training_set) / len(training_set) * 100))
+            print("Validation Accuracy: {}".format(get_accuracy(hof[0], validation_set) / len(validation_set) * 100))
+            print("Testing Accuracy: {}".format(get_accuracy(hof[0], testing_set) / len(testing_set) * 100))
             print()
         except Exception as ex:
             print()

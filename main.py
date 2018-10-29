@@ -108,22 +108,25 @@ toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("compile", gp.compile, pset=pset)
 
 
-def classify(individual):
-    records = training_set.sample(n=1000)
+def get_accuracy(individual, records):
     func = toolbox.compile(expr=individual)
     results = [bool(func(*record[:-1])) for record in records.values]
     result = len(records[records.attack_type == results])
-    return result,
+    return result
+
+
+def classify(individual):
+    return get_accuracy(individual, training_set.sample(frac=0.2)),
 
 
 toolbox.register("evaluate", classify)
-toolbox.register("select", tools.selDoubleTournament, fitness_size=20, parsimony_size=1.4, fitness_first=True)
+toolbox.register("select", tools.selDoubleTournament, fitness_size=50, parsimony_size=1.4, fitness_first=True)
 toolbox.register("mate", gp.cxOnePoint)
 toolbox.register("expr_mut", gp.genHalfAndHalf, min_=0, max_=2)
 toolbox.register("mutate", gp.mutUniform, expr=toolbox.expr_mut, pset=pset)
 
-toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 5))
-toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 5))
+toolbox.decorate("mate", gp.staticLimit(operator.attrgetter('height'), 10))
+toolbox.decorate("mutate", gp.staticLimit(operator.attrgetter('height'), 10))
 
 
 def main():
@@ -135,9 +138,14 @@ def main():
     stats.register("min", numpy.min)
     stats.register("max", numpy.max)
 
-    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=0.6, mutpb=0.2, ngen=15, stats=stats, halloffame=hof, verbose=True)
+    crossover_probability = random.uniform(0.0, 1.0)
+    mutation_probability = random.uniform(0.0, 1.0)
+    print('Crossover Rate: {}, Mutation Rate: {}'.format(crossover_probability, mutation_probability))
 
-    return pop, stats, hof, final_pop, logbook
+    # 0.6 and 0.2
+    final_pop, logbook = algorithms.eaSimple(pop, toolbox, cxpb=crossover_probability, mutpb=mutation_probability, ngen=15, stats=stats, halloffame=hof, verbose=True)
+
+    return pop, stats, hof, final_pop, logbook, crossover_probability, mutation_probability
 
 
 if __name__ == "__main__":
@@ -149,7 +157,7 @@ if __name__ == "__main__":
             start_time = datetime.datetime.now()
             print("Start time: {}".format(str(start_time)))
             training_set, validation_set, testing_set = numpy.split(dataset.sample(frac=1.0), [int(0.6 * len(dataset)), int(0.8 * len(dataset))])
-            pop, stats, hof, final_pop, logbook = main()
+            pop, stats, hof, final_pop, logbook, crossover_probability, mutation_probability = main()
             execution_time = datetime.datetime.now() - start_time
             print("Finished, saving data...")
             print("End time: {}, Execution Time: {}".format(str(datetime.datetime.now()), str(execution_time)))
@@ -157,9 +165,14 @@ if __name__ == "__main__":
                 "hof": hof,
                 "logbook": logbook,
                 "population": final_pop,
+                "crossover_probability": crossover_probability,
+                "mutation_probability": mutation_probability,
             }
             with open("classifiers/{}.pkl".format(i), "wb") as save_file:
                 pickle.dump(saved_data, save_file)
+            print("Training Accuracy: {}".format(get_accuracy(hof[0], training_set) / len(training_set) * 100))
+            print("Validation Accuracy: {}".format(get_accuracy(hof[0], validation_set) / len(validation_set) * 100))
+            print("Testing Accuracy: {}".format(get_accuracy(hof[0], testing_set) / len(testing_set) * 100))
             print()
         except Exception as ex:
             print()
