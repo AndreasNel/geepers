@@ -17,8 +17,6 @@ import random
 import pickle
 import datetime
 import numpy
-import pandas as pd
-from sklearn.preprocessing import LabelEncoder
 import itertools
 import operator
 import array
@@ -27,24 +25,11 @@ from deap import base
 from deap import creator
 from deap import tools
 from deap import gp
+from data_manager import DataManager
 
 # ====================== CAPTURE DATA BEG ==================================
-# Read the different field names
-fieldnames = pd.read_csv('field_names.csv', header=None, usecols=[0], squeeze=True).tolist()
-# Read the different attack types
-attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=True).tolist()[:-2]
-# Read the data, with the appropriate headings
-dataset = pd.read_csv('training_set.csv', header=None, names=fieldnames, true_values=['normal', 'unknown'], false_values=attacktypes)
-fieldnames = fieldnames[:-1]
-dataset.drop(columns=['difficulty_level'], inplace=True)
-
-le = LabelEncoder()
-dataset.protocol_type = le.fit_transform(dataset.protocol_type)
-dataset.service = le.fit_transform(dataset.service)
-dataset.flag = le.fit_transform(dataset.flag)
-
-dataset[dataset.columns.difference(['attack_type'])] = dataset[dataset.columns.difference(['attack_type'])].astype(float)
-dataset[['protocol_type', 'service', 'flag']] = dataset[['protocol_type', 'service', 'flag']].astype(int)
+dm = DataManager()
+dm.load_dataset()
 # ====================== CAPTURE DATA END ==================================
 
 # ====================== GP DEFINE BEG ==================================
@@ -65,8 +50,8 @@ def if_then_else(input, output1, output2):
 
 
 # Define a new primitive set for strongly typed GP
-pset = gp.PrimitiveSetTyped("MAIN", [float, int, int, int] + list(itertools.repeat(float, len(fieldnames) - 5)), bool, "IN")
-arg_mapper = {("IN" + str(i)): key for i, key in enumerate(fieldnames)}
+pset = gp.PrimitiveSetTyped("MAIN", [float, int, int, int] + list(itertools.repeat(float, len(dm.get_field_names()) - 5)), bool, "IN")
+arg_mapper = {("IN" + str(i)): key for i, key in enumerate(dm.get_field_names())}
 pset.renameArguments(**arg_mapper)
 pset.addPrimitive(operator.and_, [bool, bool], bool)
 pset.addPrimitive(operator.or_, [bool, bool], bool)
@@ -84,7 +69,7 @@ pset.addPrimitive(operator.gt, [int, int], bool)
 pset.addPrimitive(operator.eq, [int, int], bool)
 pset.addPrimitive(if_then_else, [bool, int, int], int)
 pset.addEphemeralConstant("rand100", lambda: random.random() * 100, float)
-for i in numpy.unique(dataset[['protocol_type', 'service', 'flag']]):
+for i in numpy.unique(dm.get_data_set()[['protocol_type', 'service', 'flag']]):
     pset.addTerminal(i, int)
 pset.addTerminal(False, bool)
 pset.addTerminal(True, bool)
@@ -123,7 +108,7 @@ def get_accuracy(individual, records):
 
 
 def eval_classification(individual):
-    records = dataset.sample(n=10000)
+    records = dm.get_training_set().sample(n=10000)
     return get_accuracy(individual, records),
 
 
@@ -153,14 +138,13 @@ def main():
 
 
 if __name__ == "__main__":
-    global training_set, validation_set, testing_set
     for i in range(0, 5):
         try:
             print()
             print("Starting run #{}...".format(i))
             start_time = datetime.datetime.now()
             print("Start time: {}".format(str(start_time)))
-            training_set, validation_set, testing_set = numpy.split(dataset.sample(frac=1.0), [int(0.6 * len(dataset)), int(0.8 * len(dataset))])
+            dm.split_dataset(0.6, 0.2)
             pop, logbook, hof, crossover_probability, mutation_probability = main()
             execution_time = datetime.datetime.now() - start_time
             print("Finished, saving data...")
@@ -174,6 +158,7 @@ if __name__ == "__main__":
             }
             with open("hyper_heuristics/{}.pkl".format(i), "wb") as save_file:
                 pickle.dump(saved_data, save_file)
+            training_set, validation_set, testing_set = dm.get_training_set(), dm.get_validation_set(), dm.get_testing_set()
             print("Training Accuracy: {}".format(get_accuracy(hof[0], training_set) / len(training_set) * 100))
             print("Validation Accuracy: {}".format(get_accuracy(hof[0], validation_set) / len(validation_set) * 100))
             print("Testing Accuracy: {}".format(get_accuracy(hof[0], testing_set) / len(testing_set) * 100))
