@@ -17,8 +17,6 @@ import random
 import pickle
 import datetime
 import numpy
-import itertools
-import operator
 import array
 from deap import algorithms
 from deap import base
@@ -26,6 +24,7 @@ from deap import creator
 from deap import tools
 from deap import gp
 from data_manager import DataManager
+from classifier import Classifier
 
 # ====================== CAPTURE DATA BEG ==================================
 dm = DataManager()
@@ -33,47 +32,9 @@ dm.load_dataset()
 # ====================== CAPTURE DATA END ==================================
 
 # ====================== GP DEFINE BEG ==================================
-# Define a protected division function
-def protectedDiv(left, right):
-    try:
-        return left / right
-    except ZeroDivisionError:
-        return 1
-
-
-# Define a new if-then-else function
-def if_then_else(input, output1, output2):
-    if input:
-        return output1
-    else:
-        return output2
-
-
-# Define a new primitive set for strongly typed GP
-pset = gp.PrimitiveSetTyped("MAIN", [float, int, int, int] + list(itertools.repeat(float, len(dm.get_field_names()) - 5)), bool, "IN")
-arg_mapper = {("IN" + str(i)): key for i, key in enumerate(dm.get_field_names())}
-pset.renameArguments(**arg_mapper)
-pset.addPrimitive(operator.and_, [bool, bool], bool)
-pset.addPrimitive(operator.or_, [bool, bool], bool)
-pset.addPrimitive(operator.not_, [bool], bool)
-pset.addPrimitive(operator.add, [float, float], float)
-pset.addPrimitive(operator.sub, [float, float], float)
-pset.addPrimitive(operator.mul, [float, float], float)
-pset.addPrimitive(protectedDiv, [float, float], float)
-pset.addPrimitive(operator.lt, [float, float], bool)
-pset.addPrimitive(operator.gt, [float, float], bool)
-pset.addPrimitive(operator.eq, [float, float], bool)
-pset.addPrimitive(if_then_else, [bool, float, float], float)
-pset.addPrimitive(operator.lt, [int, int], bool)
-pset.addPrimitive(operator.gt, [int, int], bool)
-pset.addPrimitive(operator.eq, [int, int], bool)
-pset.addPrimitive(if_then_else, [bool, int, int], int)
-pset.addEphemeralConstant("rand100", lambda: random.random() * 100, float)
-for i in numpy.unique(dm.get_data_set()[['protocol_type', 'service', 'flag']]):
-    pset.addTerminal(i, int)
-pset.addTerminal(False, bool)
-pset.addTerminal(True, bool)
-
+definer = Classifier(data_manager=dm)
+definer.create_structure()
+pset = definer.get_structure()
 
 creator.create("FitnessMax", base.Fitness, weights=(1.0,))
 creator.create("Individual", gp.PrimitiveTree, fitness=creator.FitnessMax)
