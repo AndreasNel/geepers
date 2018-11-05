@@ -9,17 +9,18 @@ class DataManager:
         self.training_set = pd.DataFrame()
         self.validation_set = pd.DataFrame()
         self.testing_set = pd.DataFrame()
-        self.fieldnames = pd.DataFrame()
+        self.fieldnames = []
 
     def load_dataset(self):
         """
-        Loads the data set from the files and formats it.
+        Loads the data set from the files and formats it. This function is responsible for setting the fieldnames
+        and the dataset properties of the data manager.
         :return: self
         """
         # Read the different field names
         self.fieldnames = pd.read_csv('field_names.csv', header=None, usecols=[0], squeeze=True).tolist()
         # Read the data, with the appropriate headings
-        dataset = pd.read_csv('training_set.csv', header=None, names=self.fieldnames)
+        dataset = pd.read_csv('data_set.csv', header=None, names=self.fieldnames)
         replacements = [False if t in ['unknown', 'normal'] else True for t in dataset.attack_type.unique()]
         dataset.attack_type.replace(dataset.attack_type.unique(), replacements, inplace=True)
 
