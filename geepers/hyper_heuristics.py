@@ -8,8 +8,8 @@ from deap import base
 from deap import creator
 from deap import tools
 from deap import gp
-from data_manager import DataManager
-from classifier import Classifier
+from geepers.data_manager import DataManager
+from geepers.classifier import Classifier
 
 
 class HyperHeuristic:
