@@ -18,11 +18,11 @@ class DataManager:
         """
         # Read the different field names
         self.fieldnames = pd.read_csv('field_names.csv', header=None, usecols=[0], squeeze=True).tolist()
-        # Read the different attack types
-        attacktypes = pd.read_csv('attack_types.csv', header=None, usecols=[0], squeeze=True).tolist()[:-2]
         # Read the data, with the appropriate headings
-        dataset = pd.read_csv('training_set.csv', header=None, names=self.fieldnames, true_values=['normal', 'unknown'],
-                              false_values=attacktypes)
+        dataset = pd.read_csv('training_set.csv', header=None, names=self.fieldnames)
+        replacements = [False if t in ['unknown', 'normal'] else True for t in dataset.attack_type.unique()]
+        dataset.attack_type.replace(dataset.attack_type.unique(), replacements, inplace=True)
+
         self.fieldnames = self.fieldnames[:-1]
         dataset.drop(columns=['difficulty_level'], inplace=True)
 
@@ -44,9 +44,9 @@ class DataManager:
         :param test_ratio: The ratio of the testing set in relation to the size of the data set.
         :return: self
         """
-        self.training_set, self.testing_set, self.validation_set = np.split(self.dataset.sample(frac=1.0),
-                                                                            [int(train_ratio * len(self.dataset)),
-                                                                             int((train_ratio + test_ratio) * len(self.dataset))])
+        self.training_set, self.testing_set, self.validation_set = np.split(
+            self.dataset.sample(frac=1.0),
+            [int(train_ratio * len(self.dataset)), int((train_ratio + test_ratio) * len(self.dataset))])
         return self
 
     def get_training_set(self):

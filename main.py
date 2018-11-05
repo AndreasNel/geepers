@@ -1,24 +1,7 @@
-#    This file is part of EAP.
-#
-#    EAP is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU Lesser General Public License as
-#    published by the Free Software Foundation, either version 3 of
-#    the License, or (at your option) any later version.
-#
-#    EAP is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-#    GNU Lesser General Public License for more details.
-#
-#    You should have received a copy of the GNU Lesser General Public
-#    License along with EAP. If not, see <http://www.gnu.org/licenses/>.
-
 import random
 import operator
 import pickle
 import datetime
-# import matplotlib.pyplot as plt
-# import networkx as nx
 import numpy
 
 from deap import algorithms
@@ -119,13 +102,3 @@ if __name__ == "__main__":
             print(str(ex))
             print("=" * 50)
             print()
-
-    # nodes, edges, labels = gp.graph(hof[0])
-    # g = nx.Graph()
-    # g.add_nodes_from(nodes)
-    # g.add_edges_from(edges)
-    # pos = nx.drawing.nx_pydot.pydot_layout(g, prog="dot")
-    # nx.draw_networkx_nodes(g, pos)
-    # nx.draw_networkx_edges(g, pos)
-    # nx.draw_networkx_labels(g, pos, labels)
-    # plt.show()
