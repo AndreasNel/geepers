@@ -5,7 +5,7 @@ with open("README.md", "r") as file:
 
 setuptools.setup(
     name="geepers_pkg",
-    version="0.0.1",
+    version="0.0.2",
     author="Andreas Nel",
     author_email="nel.andreas1@gmail.com",
     description="Package to create generation constructive hyper-heuristics.",
