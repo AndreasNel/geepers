@@ -1,4 +1,6 @@
 # Geepers
+[![PyPI version](https://badge.fury.io/py/geepers-pkg.svg)](https://badge.fury.io/py/geepers-pkg)
+
 This is a small toolkit that allows the user to create classifiers via genetic programming, which can then be used
 by a hyper-heuristic (in this case a genetic algorithm) in order to improve results.
 
